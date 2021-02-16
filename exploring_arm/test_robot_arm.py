@@ -13,7 +13,7 @@ from stable_baselines import PPO2
 print('setting up environment')
 #env = gym.make("REALRobot2020-R2J3-v0")
 env = REALRobotEnv(objects=1)
-env = WrapRobot(env)
+env = WrapRobot(env, crop_obs=True)
 
 print('setting up ppo model')
 model = PPO2(CnnPolicy, env, verbose=1)
@@ -23,7 +23,7 @@ print('learning done')
 
 #Here we need to restart the environent to make rendering possible
 env = REALRobotEnv(objects=1)
-env = WrapRobot(env)
+env = WrapRobot(env, crop_obs=True)
 
 env.render("human")
 

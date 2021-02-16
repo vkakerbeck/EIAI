@@ -12,12 +12,19 @@ class WrapRobot(object):
     as they don't support Dict observations.
     Also the action space is reformated into the Box format, omitting
     the render parameter.
+
+    crop_obs: Specifies whether the retina image should be cropped from
+             240x320x3 to 180x180x3 (mainly cuts off white space)
     '''
-    def __init__(self, env):
+    def __init__(self, env,crop_obs=False):
         self._env = env
+        self.crop_obs = crop_obs
 
         self._env.action_space = self._env.action_space['joint_command']
-        self._env.observation_space = self._env.observation_space['retina']
+        if self.crop_obs:
+            self._env.observation_space = spaces.Box(low=0, high=255.0,shape=(180,180,3), dtype='float32')
+        else:
+            self._env.observation_space = self._env.observation_space['retina']
 
     def __getattr__(self, name):
         return getattr(self._env, name)
@@ -28,34 +35,49 @@ class WrapRobot(object):
             'render': True,
         }
         observation, reward, done, info = self._env.step_joints(action)
-        observation = observation['retina']
+        if self.crop_obs:
+            observation = observation['retina'][0:180,70:250,:]
+        else:
+            observation = observation['retina']
         return observation, reward, done, info
 
     def reset(self):
-        obs = self._env.reset()
-        return obs['retina']
+        observation = self._env.reset()
+        if self.crop_obs:
+            observation = observation['retina'][0:180,70:250,:]
+        else:
+            observation = observation['retina']
+        return observation
 
 class GoalWrapper(object):
-        '''
-        Wrapper for the REALRobotEnv (based on MJCFBaseBulletEnv).
-        Returns Dict of 3 Box items (observation, achieved_goal,
-        desired_goal) as observation instead of the entire
-        Dictionary of (joint_positions, touch_sensors, retina, depth,
-        mask, object_positions, goal, goal_mask, goal_positions).
-        This is required follows the naming and format of the openAI
-        stable-baselines her implementation.
-        For observation the retina image is used, the two goal elements
-        are currently placeholder.
-        The stable_baselines implementation currently only supports 1D
-        observations which is why the images are flattened.
-        Also the action space is reformated into the Box format, omitting
-        the render parameter.
-        '''
-    def __init__(self, env):
-        self._env = env
+    '''
+    Wrapper for the REALRobotEnv (based on MJCFBaseBulletEnv).
+    Returns Dict of 3 Box items (observation, achieved_goal,
+    desired_goal) as observation instead of the entire
+    Dictionary of (joint_positions, touch_sensors, retina, depth,
+    mask, object_positions, goal, goal_mask, goal_positions).
+    This is required follows the naming and format of the openAI
+    stable-baselines her implementation.
+    For observation the retina image is used, the two goal elements
+    are currently placeholder.
+    The stable_baselines implementation currently only supports 1D
+    observations which is why the images are flattened.
+    Also the action space is reformated into the Box format, omitting
+    the render parameter.
 
-        obs_shape = env.observation_space['retina'].shape
-        obs_shape_1D = obs_shape[0]*obs_shape[1]*obs_shape[2]
+    crop_obs: Specifies whether the retina image + desired & achieved
+            goal should be cropped from 240x320x3 to 180x180x3 (mainly
+            cuts off white space)
+    '''
+    def __init__(self, env, crop_obs=False):
+        self._env = env
+        self.crop_obs = crop_obs
+
+        if self.crop_obs:
+            obs_shape_1D = 180*180*3
+        else:
+            obs_shape = env.observation_space['retina'].shape
+            obs_shape_1D = obs_shape[0]*obs_shape[1]*obs_shape[2]
 
         self._env.action_space = self._env.action_space['joint_command']
         # TODO: replace goal placeholders with actual goals
@@ -74,17 +96,34 @@ class GoalWrapper(object):
             'render': True,
         }
         observation, reward, done, info = self._env.step_joints(action)
-        observation = {
-            'observation': observation['retina'].flatten(),
-            'achieved_goal': observation['goal'].flatten(),
-            'desired_goal': observation['goal'].flatten(),
+        if self.crop_obs:
+            observation = {
+            'observation': observation['retina'][0:180,70:250,:].flatten(),
+            'achieved_goal': observation['goal'][0:180,70:250,:].flatten(),
+            'desired_goal': observation['goal'][0:180,70:250,:].flatten(),
         }
+        else:
+            observation = {
+                'observation': observation['retina'].flatten(),
+                'achieved_goal': observation['goal'].flatten(),
+                'desired_goal': observation['goal'].flatten(),
+            }
         return observation, reward, done, info
+
     def reset(self):
         observation = self._env.reset()
-        observation = {
-            'observation': observation['retina'].flatten(),
-            'achieved_goal': observation['goal'].flatten(),
-            'desired_goal': observation['goal'].flatten(),
+
+        if self.crop_obs:
+            observation = {
+            'observation': observation['retina'][0:180,70:250,:].flatten(),
+            'achieved_goal': observation['goal'][0:180,70:250,:].flatten(),
+            'desired_goal': observation['goal'][0:180,70:250,:].flatten(),
         }
+        else:
+            observation = {
+                'observation': observation['retina'].flatten(),
+                'achieved_goal': observation['goal'].flatten(),
+                'desired_goal': observation['goal'].flatten(),
+            }
+
         return observation
